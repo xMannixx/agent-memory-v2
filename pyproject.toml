@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memory-core"
+version = "2.0.0"
+description = "Deterministic Agent Memory Core v2"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+openai = ["openai>=1.0.0"]
+
+[project.scripts]
+memory-cli = "src.cli:main"
+
+[tool.setuptools]
+packages = ["src", "src.adapters"]
