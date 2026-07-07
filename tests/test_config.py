@@ -47,24 +47,23 @@ class TestDefaults:
         assert resolved.is_absolute()
 
 
-class TestTomlFile:
-    """Verify TOML file loading."""
+class TestJsonFile:
+    """Verify JSON file loading."""
 
-    def test_toml_overrides_defaults(self, tmp_path):
-        toml_file = tmp_path / "config.toml"
-        toml_file.write_text(
-            '[storage]\nmode = "per-namespace"\ndata_dir = "/tmp/test"\n'
-            '[narrative]\nmax_chars = 1500\n'
+    def test_json_overrides_defaults(self, tmp_path):
+        json_file = tmp_path / "config.json"
+        json_file.write_text(
+            '{"storage": {"mode": "per-namespace", "data_dir": "/tmp/test"}, "narrative": {"max_chars": 1500}}'
         )
-        config = load_config(str(toml_file))
+        config = load_config(str(json_file))
         assert config.storage.mode == "per-namespace"
         assert config.storage.data_dir == "/tmp/test"
         assert config.narrative.max_chars == 1500
         # Unchanged sections keep defaults.
         assert config.consolidator.max_episodes_per_run == 200
 
-    def test_missing_toml_uses_defaults(self):
-        config = load_config("/nonexistent/path/config.toml")
+    def test_missing_json_uses_defaults(self):
+        config = load_config("/nonexistent/path/config.json")
         assert config.storage.mode == "single"
 
 
@@ -96,9 +95,9 @@ class TestEnvOverrides:
         config = load_config()
         assert config.narrative.max_chars == 2000
 
-    def test_env_beats_toml(self, tmp_path, monkeypatch):
-        toml_file = tmp_path / "config.toml"
-        toml_file.write_text('[narrative]\nmax_chars = 1500\n')
+    def test_env_beats_json(self, tmp_path, monkeypatch):
+        json_file = tmp_path / "config.json"
+        json_file.write_text('{"narrative": {"max_chars": 1500}}')
         monkeypatch.setenv("MEMORY_CORE_NARRATIVE_MAX_CHARS", "999")
-        config = load_config(str(toml_file))
+        config = load_config(str(json_file))
         assert config.narrative.max_chars == 999

@@ -93,7 +93,7 @@ class TestInv2StdlibOnly:
         "operator", "os", "pathlib", "pickle", "platform", "pprint",
         "queue", "random", "re", "shutil", "signal", "socket", "sqlite3",
         "string", "struct", "subprocess", "sys", "tempfile", "textwrap",
-        "threading", "time", "timeit", "tomllib", "traceback", "types",
+        "threading", "time", "timeit", "traceback", "types",
         "typing", "unicodedata", "unittest", "urllib", "uuid", "warnings",
         "weakref", "xml", "zipfile", "zlib",
     }

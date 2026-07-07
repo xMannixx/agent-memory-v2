@@ -2,12 +2,12 @@
 
 Loads settings from (in order of precedence, highest wins):
     1. Environment variables (``MEMORY_CORE_*`` prefix)
-    2. TOML config file (``config.toml``)
+    2. JSON config file (``config.json``)
     3. Hard-coded defaults
 
-Uses ``tomllib`` (Python >= 3.11, stdlib).  Config path resolution:
+Uses ``json`` (stdlib).  Config path resolution:
     - Explicit path via ``MEMORY_CORE_CONFIG`` env var.
-    - ``<data_dir>/config.toml`` where *data_dir* defaults to
+    - ``<data_dir>/config.json`` where *data_dir* defaults to
       ``~/.memory-core``.
 
 Spec reference: §11.
@@ -16,7 +16,7 @@ Spec reference: §11.
 from __future__ import annotations
 
 import os
-import tomllib
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -161,16 +161,16 @@ def _find_config_file(data_dir: str) -> Optional[Path]:
             return path
         return None
 
-    path = Path(data_dir).expanduser() / "config.toml"
+    path = Path(data_dir).expanduser() / "config.json"
     if path.is_file():
         return path
     return None
 
 
-def _load_toml(path: Path) -> dict:
-    """Read and parse a TOML file."""
-    with open(path, "rb") as fh:
-        return tomllib.load(fh)
+def _load_json(path: Path) -> dict:
+    """Read and parse a JSON file."""
+    with open(path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def _section_to_dataclass(section_dict: dict, cls: type) -> Any:
@@ -187,7 +187,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
     Parameters
     ----------
     config_path:
-        Explicit path to a TOML file.  Overrides env and default
+        Explicit path to a JSON file.  Overrides env and default
         discovery.
 
     Returns
@@ -198,19 +198,19 @@ def load_config(config_path: Optional[str] = None) -> Config:
     # Start with defaults.
     merged: Dict[str, dict] = {k: dict(v) for k, v in _DEFAULTS.items()}
 
-    # Layer 2: TOML file.
+    # Layer 2: JSON file.
     data_dir = os.environ.get(
         f"{_ENV_PREFIX}STORAGE_DATA_DIR",
         _DEFAULTS["storage"]["data_dir"],
     )
 
     if config_path:
-        toml_path = Path(config_path)
+        json_path = Path(config_path)
     else:
-        toml_path = _find_config_file(data_dir)
+        json_path = _find_config_file(data_dir)
 
-    if toml_path and toml_path.is_file():
-        file_data = _load_toml(toml_path)
+    if json_path and json_path.is_file():
+        file_data = _load_json(json_path)
         merged = _deep_merge(merged, file_data)
 
     # Layer 3: Environment variables.
