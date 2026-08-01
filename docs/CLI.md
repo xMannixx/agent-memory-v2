@@ -3,8 +3,19 @@
 The `memory-cli` tool provides a direct interface for developers and system administrators to manage namespaces, review pending proposals, and trigger background consolidation.
 
 ## Global Options
-*(Note: Current global configuration is handled via `Config` environment variables).*
-- `MEMORY_CORE_STORAGE_DATA_DIR`: Set the root directory for SQLite files (default: `~/.memory-core`).
+
+Configuration is loaded via `load_config()` with the following precedence (highest wins): Environment variables → JSON config file → Defaults.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MEMORY_CORE_STORAGE_DATA_DIR` | `~/.memory-core` | Root directory for SQLite files |
+| `MEMORY_CORE_STORAGE_MODE` | `single` | `single` (one DB) or `per-namespace` |
+| `MEMORY_CORE_CONFIG` | — | Explicit path to a JSON config file |
+| `MEMORY_CORE_CONSOLIDATOR_MAX_EPISODES_PER_RUN` | `200` | Max episodes per consolidation run |
+| `MEMORY_CORE_CONSOLIDATOR_MAX_NEW_FACTS_PER_RUN` | `20` | Budget: max new facts committed per run |
+| `MEMORY_CORE_CONSOLIDATOR_REVIEW_TTL_DAYS` | `14` | Days before pending proposals expire |
+| `MEMORY_CORE_NARRATIVE_MAX_CHARS` | `2000` | Max characters for narratives |
+| `MEMORY_CORE_NARRATIVE_REVIEW` | `false` | Require human review for narratives |
 
 ## Commands
 
@@ -39,7 +50,7 @@ memory-cli queue ls <namespace>
 ```
 
 #### `queue approve`
-Approves a specific proposal ID, moving it from the queue into the active `facts` table, and marking the audit log as `SUCCESS (APPROVED)`.
+Approves a proposal and atomically commits its payload (fact, supersede, or narrative) to the database. The status flip, data write, and audit entry happen within a single SQLite transaction.
 
 ```bash
 memory-cli queue approve <namespace> <proposal_id> [--by <operator>]

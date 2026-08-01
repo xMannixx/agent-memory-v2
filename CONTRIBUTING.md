@@ -28,7 +28,7 @@ If your PR breaks an invariant, the test suite will fail. If the test suite pass
 
 ## 3. Running the Test Suite
 
-The test suite is extensive (144+ tests) and enforces invariants strictly via metaprogramming (`test_invariants.py`).
+The test suite is extensive (150+ tests) and enforces invariants strictly via metaprogramming (`test_invariants.py`).
 
 Run the suite using `pytest`:
 ```bash

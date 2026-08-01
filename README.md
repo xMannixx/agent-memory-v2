@@ -4,7 +4,7 @@
   
   [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-  [![Tests](https://img.shields.io/badge/tests-144%20passed-brightgreen.svg)]()
+  [![Tests](https://img.shields.io/badge/tests-150%20passed-brightgreen.svg)]()
 </div>
 
 <hr/>
@@ -17,7 +17,7 @@ Instead of letting an LLM write raw SQL or manipulate JSON files directly, the L
 
 * **Strictly Deterministic Gates**: A pure functional, LLM-free pipeline (Gates 1-9) guarantees that no prompt injections, unauthorized writes, or schema violations enter the system.
 * **Append-Only Audit Trail**: Every accepted and rejected proposal is logged with a strict reason code. The system is 100% fail-closed.
-* **Human-in-the-Loop Queue**: Highly privileged memory lanes (like `identity` or `procedural_rules`) cannot be altered by the LLM alone. They are routed to a pending `proposal_queue` for human administrator approval.
+* **Human-in-the-Loop Queue**: Highly privileged memory lanes (like `identity` or `procedural_rules`) cannot be altered by the LLM alone. They are routed to a pending `proposal_queue` for human administrator approval. Approvals atomically commit the fact to the database within a single SQLite transaction.
 * **Asynchronous Digestion**: Memory ingestion (writing raw episodes/conversations) never blocks on the LLM. The LLM runs as a decoupled background worker (the "Consolidator").
 * **Maximum Portability (Zero Dependencies)**: The core pipeline is built strictly using the Python Standard Library. No `sqlalchemy`, no `pydantic`, no 3rd-party bloat.
 
@@ -34,6 +34,24 @@ pip install .
 # Install with the official OpenAI adapter
 pip install .[openai]
 ```
+
+## ⚙️ Configuration
+
+Memory Core v2 loads settings from three layers (highest precedence wins):
+
+1. **Environment variables** (`MEMORY_CORE_*` prefix)
+2. **JSON config file** (`<data_dir>/config.json` or `MEMORY_CORE_CONFIG`)
+3. **Hard-coded defaults**
+
+Key environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MEMORY_CORE_STORAGE_DATA_DIR` | `~/.memory-core` | Root directory for SQLite files |
+| `MEMORY_CORE_STORAGE_MODE` | `single` | `single` (one DB) or `per-namespace` |
+| `MEMORY_CORE_CONFIG` | — | Explicit path to a JSON config file |
+| `MEMORY_CORE_CONSOLIDATOR_MAX_NEW_FACTS_PER_RUN` | `20` | Budget: max new facts per consolidation run |
+| `MEMORY_CORE_NARRATIVE_REVIEW` | `false` | Require human review for narratives |
 
 ## 🚀 Quickstart
 
@@ -54,11 +72,11 @@ memory-cli run my_agent
 ```
 
 ### 3. Review the Proposal Queue
-If the LLM proposed updates to privileged lanes (e.g., identity facts), review and approve them.
+If the LLM proposed updates to privileged lanes (e.g., identity facts), review and approve them. Approval atomically writes the fact to the database.
 
 ```bash
 memory-cli queue ls my_agent
-memory-cli queue approve my_agent prop_1234abcd
+memory-cli queue approve my_agent prop_1234abcd --by admin
 ```
 
 ### 4. Inspect the Audit Log
@@ -72,9 +90,9 @@ memory-cli audit my_agent -n 10
 
 Dive deeper into how Memory Core v2 works:
 
-- [Architecture Overview](docs/ARCHITECTURE.md) - Deep dive into the 5 core blocks and the Gate Pipeline.
-- [CLI Reference](docs/CLI.md) - Detailed guide to the `memory-cli`.
-- [Contributing](CONTRIBUTING.md) - How to run the test suite and maintain the system invariants.
+- [Architecture Overview](docs/ARCHITECTURE.md) — Deep dive into the 5 core blocks and the Gate Pipeline.
+- [CLI Reference](docs/CLI.md) — Detailed guide to the `memory-cli`.
+- [Contributing](CONTRIBUTING.md) — How to run the test suite and maintain the system invariants.
 
 ## 🏗 Architecture at a Glance
 
@@ -84,6 +102,14 @@ Memory Core v2 is built in 5 strictly decoupled blocks:
 3. **The Engine (B3)**: The asynchronous `Consolidator` run loop.
 4. **The Context (B4)**: The Narrative layer and dynamic injection adapters for the host LLM prompt.
 5. **The Shell (B5)**: The packaging structure and the CLI.
+
+## 🔒 Security Model
+
+- **Fail-Closed Gates (INV-6)**: Any gate exception causes an automatic rejection — never a silent pass.
+- **Origin Ceiling (G4)**: Untrusted sources (`external_web`, `unknown`) are restricted to the `evidence` lane.
+- **Anti-Injection (G2)**: Detects `SYSTEM:` overrides, code fences, and "ignore previous" patterns.
+- **Budget Enforcement (G8)**: Only actually committed facts count toward the per-run budget. Queued proposals do not consume budget.
+- **Atomic Approvals**: `queue approve` writes the fact + flips status + creates audit entry within a single SQLite transaction with rollback on error.
 
 ---
 *Built for the Agent Memory Skill framework.*

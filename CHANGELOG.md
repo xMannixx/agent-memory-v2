@@ -2,6 +2,28 @@
 
 All notable changes to Memory Core v2 will be documented here.
 
+## [2.0.1] — 2026-08-01
+
+### Fixed
+- **CLI**: `queue approve` and `queue reject` crashed with `TypeError: missing 1 required positional argument: 'by'`. Added `--by` flag (defaults to `$USER` or `"cli"`).
+- **CLI**: `audit` command crashed with `OperationalError: no such column: operation`. Fixed column names to match actual schema (`op`, `accepted`, `ts`).
+- **CLI**: Configuration from environment variables (`MEMORY_CORE_STORAGE_DATA_DIR`, `MEMORY_CORE_STORAGE_MODE`, etc.) was silently ignored. CLI now uses `load_config()` instead of bare `Config()`.
+- **Queue**: `approve()` only flipped the queue status without writing the fact to the database. Now performs an atomic commit: writes fact/supersede/narrative + flips status + creates audit entry in a single SQLite transaction with rollback on error.
+- **Gates**: Budget counter (G8) incremented for proposals that were subsequently queued, consuming budget without writing facts. Counter now only increments in the consolidator after actual fact commits.
+- **Docs**: `CLI.md` referenced non-existent `MEMORY_CORE_DB_DIR` env var. Corrected to `MEMORY_CORE_STORAGE_DATA_DIR`.
+- **SKILL.md**: Showed Blocks 2–5 as incomplete despite full implementation. Updated to reflect actual status.
+
+### Changed
+- `queue approve` now atomically commits the proposal payload (fact, supersede, or narrative) to the database within the same transaction.
+- Budget semantic clarified: `max_new_facts_per_run` counts only actually committed facts, not queued proposals.
+- CLI `queue approve`/`reject` commands now accept `--by <operator>` for audit trail identity.
+
+### Tests
+- Added 6 new CLI tests covering `queue approve`, `queue reject`, `audit`, and env var propagation.
+- Updated `test_queue.py::test_approve` to use realistic payload and verify atomic fact commit.
+- Fixed all CLI tests to use correct env var `MEMORY_CORE_STORAGE_DATA_DIR` (was `MEMORY_CORE_DB_DIR`).
+- Total: **150 tests passed** (was 144).
+
 ## [2.0.0] — 2026-07-07
 
 ### Added (Block 5)
@@ -52,7 +74,7 @@ All notable changes to Memory Core v2 will be documented here.
 
 ### Added
 - **Repo skeleton** with `src/` package, `cli/`, `tests/`.
-- **Configuration loader** (`src/config.py`): TOML-based (`tomllib`),
+- **Configuration loader** (`src/config.py`): JSON-based,
   env var overrides (`MEMORY_CORE_*`), three-layer precedence chain.
 - **Schema** (`src/schema.py`): All v2 tables (episodes, facts,
   narratives, proposal_queue, entities, entity_relations, lessons,
