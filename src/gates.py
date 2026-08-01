@@ -247,9 +247,8 @@ class GatePipeline:
         if ptype == "fact":
             if ctx.new_facts_count >= ctx.config.consolidator.max_new_facts_per_run:
                 return GateResult("reject", "budget_exceeded", "Run budget exceeded")
-            # We don't increment here yet, because it might be queued. But actually we should.
-            # We will increment it in the consolidator run loop or here assuming it passes.
-            ctx.new_facts_count += 1
+            # Budget is incremented in the consolidator after commit, not here,
+            # so that queued proposals do not consume the run budget.
             
         return GateResult("pass")
 

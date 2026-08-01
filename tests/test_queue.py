@@ -38,7 +38,14 @@ def test_enqueue_and_list(queue):
 
 
 def test_approve(queue):
-    queue.enqueue("prop_1", "run_1", "default", "fact", {}, {})
+    payload = {
+        "content": "Approved fact content",
+        "lane": "evidence",
+        "confidence": 0.8,
+        "source": "inference",
+        "evidence_refs": [],
+    }
+    queue.enqueue("prop_1", "run_1", "default", "fact", payload, {})
     assert queue.approve("default", "prop_1", "human") is True
     
     pending = queue.list_pending("default")
@@ -47,6 +54,13 @@ def test_approve(queue):
     prop = queue.get("default", "prop_1")
     assert prop.status == "approved"
     assert prop.decided_by == "human"
+    
+    # Verify fact was atomically committed
+    conn = queue._router.connect("default")
+    cursor = conn.cursor()
+    cursor.execute("SELECT content FROM facts WHERE namespace = ?", ("default",))
+    rows = cursor.fetchall()
+    assert any("Approved fact content" in r[0] for r in rows)
 
 
 def test_reject(queue):

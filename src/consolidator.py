@@ -138,9 +138,11 @@ class Consolidator:
                 if ptype == "fact":
                     self._write_fact(namespace, p)
                     stats["facts_written"] += 1
+                    ctx.new_facts_count += 1  # budget: count committed facts only
                 elif ptype == "supersede":
                     self._supersede_fact(namespace, p)
                     stats["facts_written"] += 1
+                    ctx.new_facts_count += 1  # budget: count committed facts only
                 elif ptype == "narrative":
                     # For B3, we just count it. B4 will implement narratives.
                     pass

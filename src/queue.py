@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from .audit import AuditLog
 from .config import Config
+from .ids import fact_id
 from .models import Proposal, _json_loads_safe
 from .router import StorageRouter
 
@@ -119,8 +120,106 @@ class ProposalQueue:
         return _row_to_proposal(row) if row else None
 
     def approve(self, namespace: str, proposal_id: str, by: str) -> bool:
-        """Mark a proposal as approved."""
-        return self._decide(namespace, proposal_id, "approved", by, "human_approved")
+        """Approve a proposal and atomically commit its payload.
+
+        Within a single SQLite transaction this method:
+        1. Writes the fact / supersede / narrative to the appropriate table.
+        2. Sets the queue status to ``approved``.
+        3. Creates an audit entry.
+
+        Returns ``False`` if the proposal does not exist or is not pending.
+        """
+        proposal = self.get(namespace, proposal_id)
+        if not proposal or proposal.status != "pending":
+            return False
+
+        conn = self._router.connect(namespace)
+        cursor = conn.cursor()
+        now = _utc_now().isoformat()
+
+        try:
+            # -- commit payload -----------------------------------------------
+            ptype = proposal.proposal_type
+            payload = proposal.payload
+
+            if ptype == "fact":
+                fid = fact_id(payload["content"], payload["lane"])
+                cursor.execute(
+                    "INSERT OR IGNORE INTO facts "
+                    "(id, namespace, content, tags, source, confidence, "
+                    "authority_class, evidence_refs, created_at, last_accessed) "
+                    "VALUES (?, ?, ?, '[]', ?, ?, ?, ?, ?, ?)",
+                    (
+                        fid, namespace, payload["content"],
+                        payload.get("source", "inference"),
+                        payload.get("confidence", 1.0),
+                        payload["lane"],
+                        json.dumps(payload.get("evidence_refs", [])),
+                        now, now,
+                    ),
+                )
+            elif ptype == "supersede":
+                old_id = payload["old_fact_id"]
+                cursor.execute(
+                    "SELECT authority_class FROM facts WHERE id = ?", (old_id,)
+                )
+                row = cursor.fetchone()
+                lane = row[0] if row else "evidence"
+                new_fid = fact_id(payload["content"], lane)
+                cursor.execute(
+                    "INSERT OR IGNORE INTO facts "
+                    "(id, namespace, content, tags, source, confidence, "
+                    "authority_class, evidence_refs, created_at, last_accessed) "
+                    "VALUES (?, ?, ?, '[]', ?, ?, ?, ?, ?, ?)",
+                    (
+                        new_fid, namespace, payload["content"],
+                        payload.get("source", "inference"), 1.0, lane,
+                        json.dumps(payload.get("evidence_refs", [])),
+                        now, now,
+                    ),
+                )
+                cursor.execute(
+                    "UPDATE facts SET superseded_by = ? WHERE id = ?",
+                    (new_fid, old_id),
+                )
+            elif ptype == "narrative":
+                cursor.execute(
+                    "SELECT COALESCE(MAX(version), 0) FROM narratives "
+                    "WHERE namespace = ?",
+                    (namespace,),
+                )
+                next_version = cursor.fetchone()[0] + 1
+                from .ids import fact_id as _gen_id  # reuse for narrative id
+                nar_id = _gen_id(payload["content"], "narrative")
+                cursor.execute(
+                    "INSERT OR IGNORE INTO narratives "
+                    "(id, namespace, version, content, created_at, created_by) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (nar_id, namespace, next_version, payload["content"], now, by),
+                )
+            # Rules and other types just get approved without a commit target
+            # (rule commit logic can be added once the procedural pipeline matures).
+
+            # -- flip queue status --------------------------------------------
+            cursor.execute(
+                "UPDATE proposal_queue "
+                "SET status = 'approved', decided_at = ?, decided_by = ? "
+                "WHERE namespace = ? AND id = ? AND status = 'pending'",
+                (now, by, namespace, proposal_id),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+        self._audit.log(
+            namespace=namespace,
+            op="proposal_approved",
+            accepted=True,
+            reason="human_approved",
+            metadata={"proposal_id": proposal_id, "by": by},
+        )
+        return True
 
     def reject(self, namespace: str, proposal_id: str, by: str) -> bool:
         """Mark a proposal as rejected."""

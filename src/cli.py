@@ -9,7 +9,7 @@ import sys
 from typing import Optional
 
 from .audit import AuditLog
-from .config import Config
+from .config import load_config
 from .consolidator import Consolidator
 from .queue import ProposalQueue
 from .router import StorageRouter
@@ -39,10 +39,12 @@ def main(args: Optional[list[str]] = None) -> int:
     q_app_p = q_subs.add_parser("approve", help="Approve a proposal")
     q_app_p.add_argument("namespace", help="Namespace")
     q_app_p.add_argument("id", help="Proposal ID")
+    q_app_p.add_argument("--by", default=os.environ.get("USER", "cli"), help="Operator identity")
     
     q_rej_p = q_subs.add_parser("reject", help="Reject a proposal")
     q_rej_p.add_argument("namespace", help="Namespace")
     q_rej_p.add_argument("id", help="Proposal ID")
+    q_rej_p.add_argument("--by", default=os.environ.get("USER", "cli"), help="Operator identity")
     
     # audit
     aud_p = subparsers.add_parser("audit", help="Tail the audit log")
@@ -55,7 +57,7 @@ def main(args: Optional[list[str]] = None) -> int:
     run_p.add_argument("--api-key", help="OpenAI API Key (or set OPENAI_API_KEY env var)")
 
     parsed = parser.parse_args(args)
-    config = Config()
+    config = load_config()
     router = StorageRouter(config)
     audit = AuditLog(router)
     
@@ -80,25 +82,25 @@ def main(args: Optional[list[str]] = None) -> int:
                 print(f"Payload: {json.dumps(p.payload, ensure_ascii=False)}")
                 print("-" * 40)
         elif parsed.q_cmd == "approve":
-            queue.approve(parsed.namespace, parsed.id)
+            queue.approve(parsed.namespace, parsed.id, parsed.by)
             print(f"Approved {parsed.id}.")
         elif parsed.q_cmd == "reject":
-            queue.reject(parsed.namespace, parsed.id)
+            queue.reject(parsed.namespace, parsed.id, parsed.by)
             print(f"Rejected {parsed.id}.")
             
     elif parsed.command == "audit":
         conn = router.connect(parsed.namespace)
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, operation, success, reason, metadata, created_at "
+            "SELECT id, ts, op, accepted, reason, metadata "
             "FROM memory_audit ORDER BY id DESC LIMIT ?",
             (parsed.lines,)
         )
         rows = cursor.fetchall()
         for r in reversed(rows):
-            status = "SUCCESS" if r[2] else "FAILURE"
-            reason = r[3] or "N/A"
-            print(f"[{r[5]}] {r[1]} - {status} ({reason}) | {r[4]}")
+            status = "SUCCESS" if r[3] else "FAILURE"
+            reason = r[4] or "N/A"
+            print(f"[{r[1]}] {r[2]} - {status} ({reason}) | {r[5]}")
             
     elif parsed.command == "run":
         api_key = parsed.api_key or os.environ.get("OPENAI_API_KEY")

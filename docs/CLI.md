@@ -4,7 +4,7 @@ The `memory-cli` tool provides a direct interface for developers and system admi
 
 ## Global Options
 *(Note: Current global configuration is handled via `Config` environment variables).*
-- `MEMORY_CORE_DB_DIR`: Set the root directory for SQLite files (default: `~/.memory-core`).
+- `MEMORY_CORE_STORAGE_DATA_DIR`: Set the root directory for SQLite files (default: `~/.memory-core`).
 
 ## Commands
 
@@ -42,15 +42,19 @@ memory-cli queue ls <namespace>
 Approves a specific proposal ID, moving it from the queue into the active `facts` table, and marking the audit log as `SUCCESS (APPROVED)`.
 
 ```bash
-memory-cli queue approve <namespace> <proposal_id>
+memory-cli queue approve <namespace> <proposal_id> [--by <operator>]
 ```
+
+- `--by`: Operator identity for the audit trail (defaults to `$USER` or `cli`).
 
 #### `queue reject`
 Rejects a specific proposal ID, removing it from the queue and marking the audit log as `REJECTED_HUMAN`.
 
 ```bash
-memory-cli queue reject <namespace> <proposal_id>
+memory-cli queue reject <namespace> <proposal_id> [--by <operator>]
 ```
+
+- `--by`: Operator identity for the audit trail (defaults to `$USER` or `cli`).
 
 ---
 
