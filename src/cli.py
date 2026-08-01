@@ -82,10 +82,16 @@ def main(args: Optional[list[str]] = None) -> int:
                 print(f"Payload: {json.dumps(p.payload, ensure_ascii=False)}")
                 print("-" * 40)
         elif parsed.q_cmd == "approve":
-            queue.approve(parsed.namespace, parsed.id, parsed.by)
+            ok = queue.approve(parsed.namespace, parsed.id, parsed.by)
+            if not ok:
+                print(f"Proposal not found or not pending: {parsed.id}", file=sys.stderr)
+                return 1
             print(f"Approved {parsed.id}.")
         elif parsed.q_cmd == "reject":
-            queue.reject(parsed.namespace, parsed.id, parsed.by)
+            ok = queue.reject(parsed.namespace, parsed.id, parsed.by)
+            if not ok:
+                print(f"Proposal not found or not pending: {parsed.id}", file=sys.stderr)
+                return 1
             print(f"Rejected {parsed.id}.")
             
     elif parsed.command == "audit":

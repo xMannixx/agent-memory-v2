@@ -187,3 +187,25 @@ def test_cli_run_missing_api_key(capsys, monkeypatch):
     
     out, err = capsys.readouterr()
     assert "OPENAI_API_KEY environment variable required" in err
+
+
+def test_cli_queue_approve_missing_returns_error(capsys, monkeypatch, tmp_path):
+    monkeypatch.setenv("MEMORY_CORE_STORAGE_DATA_DIR", str(tmp_path))
+    main(["init", "test_ns"])
+    
+    ret = main(["queue", "approve", "test_ns", "missing"])
+    assert ret == 1
+    
+    out, err = capsys.readouterr()
+    assert "Proposal not found or not pending: missing" in err
+
+
+def test_cli_queue_reject_missing_returns_error(capsys, monkeypatch, tmp_path):
+    monkeypatch.setenv("MEMORY_CORE_STORAGE_DATA_DIR", str(tmp_path))
+    main(["init", "test_ns"])
+    
+    ret = main(["queue", "reject", "test_ns", "missing"])
+    assert ret == 1
+    
+    out, err = capsys.readouterr()
+    assert "Proposal not found or not pending: missing" in err

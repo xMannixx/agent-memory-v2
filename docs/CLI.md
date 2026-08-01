@@ -59,7 +59,7 @@ memory-cli queue approve <namespace> <proposal_id> [--by <operator>]
 - `--by`: Operator identity for the audit trail (defaults to `$USER` or `cli`).
 
 #### `queue reject`
-Rejects a specific proposal ID, removing it from the queue and marking the audit log as `REJECTED_HUMAN`.
+Marks the proposal as rejected and records the decision in the audit log. It is not deleted, preserving the audit trail.
 
 ```bash
 memory-cli queue reject <namespace> <proposal_id> [--by <operator>]

@@ -207,18 +207,20 @@ class ProposalQueue:
                 "WHERE namespace = ? AND id = ? AND status = 'pending'",
                 (now, by, namespace, proposal_id),
             )
+            
+            self._audit.log_txn(
+                cursor,
+                namespace=namespace,
+                op="proposal_approved",
+                accepted=True,
+                reason="human_approved",
+                metadata={"proposal_id": proposal_id, "by": by},
+            )
             conn.commit()
         except Exception:
             conn.rollback()
             raise
 
-        self._audit.log(
-            namespace=namespace,
-            op="proposal_approved",
-            accepted=True,
-            reason="human_approved",
-            metadata={"proposal_id": proposal_id, "by": by},
-        )
         return True
 
     def reject(self, namespace: str, proposal_id: str, by: str) -> bool:
@@ -228,24 +230,31 @@ class ProposalQueue:
     def _decide(self, namespace: str, proposal_id: str, status: str, by: str, reason: str) -> bool:
         conn = self._router.connect(namespace)
         cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE proposal_queue "
-            "SET status = ?, decided_at = ?, decided_by = ? "
-            "WHERE namespace = ? AND id = ? AND status = 'pending'",
-            (status, _utc_now().isoformat(), by, namespace, proposal_id)
-        )
-        if cursor.rowcount == 0:
-            return False
-            
-        conn.commit()
         
-        self._audit.log(
-            namespace=namespace,
-            op=f"proposal_{status}",
-            accepted=(status == "approved"),
-            reason=reason,
-            metadata={"proposal_id": proposal_id, "by": by}
-        )
+        try:
+            cursor.execute(
+                "UPDATE proposal_queue "
+                "SET status = ?, decided_at = ?, decided_by = ? "
+                "WHERE namespace = ? AND id = ? AND status = 'pending'",
+                (status, _utc_now().isoformat(), by, namespace, proposal_id)
+            )
+            if cursor.rowcount == 0:
+                conn.rollback()
+                return False
+                
+            self._audit.log_txn(
+                cursor,
+                namespace=namespace,
+                op=f"proposal_{status}",
+                accepted=(status == "approved"),
+                reason=reason,
+                metadata={"proposal_id": proposal_id, "by": by}
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+            
         return True
 
     def expire_stale(self, namespace: str) -> int:
