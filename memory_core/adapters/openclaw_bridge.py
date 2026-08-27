@@ -71,14 +71,15 @@ class MemoryBridge:
         if config is not None:
             self.config = config
         else:
-            overrides: Dict[str, Any] = {}
+            import os
             if data_dir is not None:
-                overrides.setdefault("storage", {})["data_dir"] = data_dir
-            self.config = load_config(overrides if overrides else None)
+                os.environ["MEMORY_CORE_STORAGE_DATA_DIR"] = data_dir
+            self.config = load_config()
 
         # Storage
         self.router = StorageRouter(self.config)
-        init_schema(self.router, namespace)
+        conn = self.router.connect(namespace)
+        init_schema(conn)
 
         # Stores
         self.episodes = EpisodeStore(self.router)
@@ -92,7 +93,7 @@ class MemoryBridge:
         role: str,
         content: str,
         *,
-        origin: str = "conversation",
+        origin: str = "unknown",
         session_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
@@ -119,8 +120,8 @@ class MemoryBridge:
         with self._lock:
             return self.episodes.add(
                 self.namespace,
-                role,
                 content,
+                role,
                 origin=origin,
                 session_id=session_id,
                 metadata=metadata or {},
@@ -132,8 +133,8 @@ class MemoryBridge:
         assistant_message: str,
         *,
         session_id: Optional[str] = None,
-        user_origin: str = "conversation",
-        assistant_origin: str = "conversation",
+        user_origin: str = "trusted_user",
+        assistant_origin: str = "unknown",
     ) -> List[str]:
         """Convenience: record a full user+assistant turn as two episodes.
 
@@ -179,7 +180,7 @@ class MemoryBridge:
         content = f"Tool: {tool_name}\nInput: {tool_input}\nOutput: {tool_output}"
         return self.add_interaction(
             "tool", content,
-            origin="tool", session_id=session_id,
+            origin="tool_output", session_id=session_id,
             metadata={"tool": tool_name},
         )
 
