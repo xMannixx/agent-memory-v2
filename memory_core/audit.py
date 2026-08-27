@@ -7,10 +7,10 @@ Append-only.  Provenance is derived from this log.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from .router import StorageRouter
+from .utils import utc_now_iso as _utc_now_iso
 
 
 # Standardized reason codes (spec §7.3)
@@ -32,11 +32,8 @@ REASON_CODES = {
     "human_write",
     "migrated_v3",
     "expired",
+    "human_review",
 }
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 class AuditLog:

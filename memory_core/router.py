@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import threading
 from pathlib import Path
 from typing import List, Optional
 
@@ -61,6 +62,7 @@ class StorageRouter:
 
         # Connection cache: path → connection.
         self._connections: dict[str, sqlite3.Connection] = {}
+        self._lock = threading.Lock()
 
         if self._override is None:
             self._data_dir.mkdir(parents=True, exist_ok=True)
@@ -109,12 +111,13 @@ class StorageRouter:
 
     def close_all(self) -> None:
         """Close all cached connections."""
-        for conn in self._connections.values():
-            try:
-                conn.close()
-            except Exception:
-                pass
-        self._connections.clear()
+        with self._lock:
+            for conn in self._connections.values():
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            self._connections.clear()
 
     @property
     def mode(self) -> str:
@@ -140,10 +143,11 @@ class StorageRouter:
 
     def _get_or_create(self, path: str) -> sqlite3.Connection:
         """Return a cached connection or create + initialise a new one."""
-        if path in self._connections:
-            return self._connections[path]
+        with self._lock:
+            if path in self._connections:
+                return self._connections[path]
 
-        conn = sqlite3.connect(path)
-        schema.init_schema(conn)
-        self._connections[path] = conn
-        return conn
+            conn = sqlite3.connect(path, check_same_thread=False)
+            schema.init_schema(conn)
+            self._connections[path] = conn
+            return conn

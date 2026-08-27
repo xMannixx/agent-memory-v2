@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 from .models import Fact, row_to_fact
 from .router import StorageRouter
+from .utils import utc_now_iso
 
 logger = logging.getLogger("memory_core.facts")
 
@@ -38,12 +39,14 @@ AUTHORITY_POLICY = {
         "min_confidence": 0.9,
         "allowed_sources": {"observation", "conversation"},
         "single_valued": True,
+        "content_max_chars": 500,
     },
     "preference": {
         "ttl_days": 14,
         "min_confidence": 0.3,
         "allowed_sources": {"observation", "conversation"},
         "single_valued": False,
+        "content_max_chars": 1000,
     },
     "evidence": {
         "ttl_days": 60,
@@ -52,18 +55,21 @@ AUTHORITY_POLICY = {
             "observation", "conversation", "inference", "tool", "external",
         },
         "single_valued": False,
+        "content_max_chars": 2000,
     },
     "authorization": {
         "ttl_days": 90,
         "min_confidence": 0.9,
         "allowed_sources": {"observation"},
         "single_valued": True,
+        "content_max_chars": 500,
     },
     "procedural": {
         "ttl_days": 30,
         "min_confidence": 0.5,
         "allowed_sources": {"observation"},
         "single_valued": False,
+        "content_max_chars": 1500,
     },
 }
 
@@ -286,11 +292,80 @@ class FactStore:
             "by_lane": by_lane,
         }
 
+    # -- write (used by consolidator and queue) -------------------------------
+
+    def write_fact(self, namespace: str, proposal: Dict[str, Any]) -> str:
+        """Write a fact from a gate-approved proposal. Returns the fact ID."""
+        from .ids import fact_id
+        lane = proposal["lane"]
+        content = proposal["content"]
+        fid = fact_id(content, lane)
+        now = utc_now_iso()
+
+        conn = self._router.connect(namespace)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO facts "
+            "(id, namespace, content, tags, source, confidence, "
+            "authority_class, evidence_refs, created_at, last_accessed) "
+            "VALUES (?, ?, ?, '[]', ?, ?, ?, ?, ?, ?)",
+            (
+                fid, namespace, content,
+                proposal.get("source", "inference"),
+                proposal.get("confidence", 1.0),
+                lane,
+                json.dumps(proposal.get("evidence_refs", [])),
+                now, now,
+            ),
+        )
+        conn.commit()
+        return fid
+
+    def supersede_fact(self, namespace: str, proposal: Dict[str, Any]) -> Optional[str]:
+        """Supersede an existing fact. Returns the new fact ID, or None if old fact not found."""
+        from .ids import fact_id as _fact_id
+        old_id = proposal["old_fact_id"]
+        content = proposal["content"]
+
+        conn = self._router.connect(namespace)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT authority_class FROM facts WHERE id = ?", (old_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        lane = row[0]
+        new_fid = _fact_id(content, lane)
+        now = utc_now_iso()
+
+        cursor.execute(
+            "INSERT OR IGNORE INTO facts "
+            "(id, namespace, content, tags, source, confidence, "
+            "authority_class, evidence_refs, created_at, last_accessed) "
+            "VALUES (?, ?, ?, '[]', ?, ?, ?, ?, ?, ?)",
+            (
+                new_fid, namespace, content,
+                proposal.get("source", "inference"), 1.0, lane,
+                json.dumps(proposal.get("evidence_refs", [])),
+                now, now,
+            ),
+        )
+        cursor.execute(
+            "UPDATE facts SET superseded_by = ? WHERE id = ?",
+            (new_fid, old_id),
+        )
+        conn.commit()
+        return new_fid
+
     # -- sliding TTL ----------------------------------------------------------
 
     def _touch_facts(self, namespace: str, fact_ids: List[str]) -> None:
         """Refresh ``last_accessed`` and extend ``expires_at`` for accessed
-        facts (sliding TTL, spec §2 / v3.6 architecture)."""
+        facts (sliding TTL, spec §2 / v3.6 architecture).
+
+        Uses a single batched UPDATE instead of per-fact queries.
+        """
         if not fact_ids:
             return
         conn = self._router.connect(namespace)
@@ -298,28 +373,33 @@ class FactStore:
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
 
-        for fid in fact_ids:
-            # Read the lane to compute the new expiry.
-            cursor.execute(
-                "SELECT authority_class FROM facts WHERE id = ?", (fid,)
-            )
-            row = cursor.fetchone()
-            if not row:
-                continue
-            lane = row[0]
+        # Batch-read lanes for all facts in one query.
+        placeholders = ",".join("?" for _ in fact_ids)
+        cursor.execute(
+            f"SELECT id, authority_class FROM facts WHERE id IN ({placeholders})",
+            fact_ids,
+        )
+        lane_map: Dict[str, str] = {row[0]: row[1] for row in cursor.fetchall()}
+
+        # Group facts by lane for batch updates.
+        by_lane: Dict[str, List[str]] = {}
+        for fid, lane in lane_map.items():
+            by_lane.setdefault(lane, []).append(fid)
+
+        for lane, ids in by_lane.items():
             policy = AUTHORITY_POLICY.get(lane, AUTHORITY_POLICY["evidence"])
             ttl_days = policy.get("ttl_days")
-
             new_expires: Optional[str] = None
             if ttl_days is not None:
                 new_expires = (now + timedelta(days=ttl_days)).isoformat()
 
+            ph = ",".join("?" for _ in ids)
             cursor.execute(
-                "UPDATE facts SET last_accessed = ?, "
-                "access_count = access_count + 1, "
-                "expires_at = COALESCE(?, expires_at) "
-                "WHERE id = ?",
-                (now_iso, new_expires, fid),
+                f"UPDATE facts SET last_accessed = ?, "
+                f"access_count = access_count + 1, "
+                f"expires_at = COALESCE(?, expires_at) "
+                f"WHERE id IN ({ph})",
+                [now_iso, new_expires] + ids,
             )
         conn.commit()
 

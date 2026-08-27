@@ -152,7 +152,7 @@ def _apply_env(flat: dict, section: str) -> dict:
 
 
 def _find_config_file(data_dir: str) -> Optional[Path]:
-    """Locate the TOML config file."""
+    """Locate the JSON config file."""
     # Explicit override via env var.
     explicit = os.environ.get(f"{_ENV_PREFIX}CONFIG")
     if explicit:

@@ -14,6 +14,7 @@ from .config import Config
 from .ids import fact_id
 from .models import Proposal, _json_loads_safe
 from .router import StorageRouter
+from .utils import utc_now_iso
 
 
 def _utc_now() -> datetime:
@@ -122,23 +123,33 @@ class ProposalQueue:
     def approve(self, namespace: str, proposal_id: str, by: str) -> bool:
         """Approve a proposal and atomically commit its payload.
 
-        Within a single SQLite transaction this method:
-        1. Writes the fact / supersede / narrative to the appropriate table.
-        2. Sets the queue status to ``approved``.
-        3. Creates an audit entry.
+        Uses BEGIN IMMEDIATE to acquire a write lock before reading,
+        preventing race conditions with concurrent approvers.
 
         Returns ``False`` if the proposal does not exist or is not pending.
         """
-        proposal = self.get(namespace, proposal_id)
-        if not proposal or proposal.status != "pending":
-            return False
-
         conn = self._router.connect(namespace)
         cursor = conn.cursor()
-        now = _utc_now().isoformat()
+        now = utc_now_iso()
 
         try:
-            # -- commit payload -----------------------------------------------
+            # Acquire write lock immediately to prevent race conditions.
+            cursor.execute("BEGIN IMMEDIATE")
+
+            # Read proposal under write lock.
+            cursor.execute(
+                "SELECT id, run_id, namespace, proposal_type, payload, status, "
+                "gate_report, created_at, decided_at, decided_by "
+                "FROM proposal_queue "
+                "WHERE namespace = ? AND id = ? AND status = 'pending'",
+                (namespace, proposal_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                conn.rollback()
+                return False
+
+            proposal = _row_to_proposal(row)
             ptype = proposal.proposal_type
             payload = proposal.payload
 
@@ -161,10 +172,10 @@ class ProposalQueue:
             elif ptype == "supersede":
                 old_id = payload["old_fact_id"]
                 cursor.execute(
-                    "SELECT authority_class FROM facts WHERE id = ?", (old_id,)
+                    "SELECT authority_class FROM facts WHERE id = ?", (old_id,),
                 )
-                row = cursor.fetchone()
-                lane = row[0] if row else "evidence"
+                row2 = cursor.fetchone()
+                lane = row2[0] if row2 else "evidence"
                 new_fid = fact_id(payload["content"], lane)
                 cursor.execute(
                     "INSERT OR IGNORE INTO facts "
@@ -189,18 +200,16 @@ class ProposalQueue:
                     (namespace,),
                 )
                 next_version = cursor.fetchone()[0] + 1
-                from .ids import fact_id as _gen_id  # reuse for narrative id
-                nar_id = _gen_id(payload["content"], "narrative")
+                from .ids import narrative_id as _nar_id
+                nar_id = _nar_id(namespace, next_version)
                 cursor.execute(
                     "INSERT OR IGNORE INTO narratives "
                     "(id, namespace, version, content, created_at, created_by) "
                     "VALUES (?, ?, ?, ?, ?, ?)",
                     (nar_id, namespace, next_version, payload["content"], now, by),
                 )
-            # Rules and other types just get approved without a commit target
-            # (rule commit logic can be added once the procedural pipeline matures).
 
-            # -- flip queue status --------------------------------------------
+            # Flip queue status.
             cursor.execute(
                 "UPDATE proposal_queue "
                 "SET status = 'approved', decided_at = ?, decided_by = ? "

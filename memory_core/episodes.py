@@ -9,7 +9,6 @@ Episodes are searchable via FTS5 and CLI, but **never** prompt-injected
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
@@ -20,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from .ids import episode_id as _make_episode_id
 from .models import Episode, row_to_episode
 from .router import StorageRouter
+from .utils import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger("memory_core.episodes")
 

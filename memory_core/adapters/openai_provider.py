@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Dict, List
 
 from ..llm import LLMProvider
+
+logger = logging.getLogger("memory_core.adapters.openai")
 
 
 class OpenAILlm(LLMProvider):
@@ -58,17 +61,36 @@ class OpenAILlm(LLMProvider):
                 
                 raw = response.choices[0].message.content
                 if not raw:
+                    logger.warning("Empty response from OpenAI (attempt %d)", attempt)
                     continue
                     
                 parsed = json.loads(raw)
-                proposals = parsed.get("proposals", [])
-                
-                if isinstance(proposals, list):
-                    return proposals
+
+                # Handle both {"proposals": [...]} and bare [...] formats.
+                if isinstance(parsed, list):
+                    return parsed
+                if isinstance(parsed, dict):
+                    proposals = parsed.get("proposals", [])
+                    if isinstance(proposals, list):
+                        return proposals
+                    logger.warning(
+                        "OpenAI response 'proposals' key is not a list: %s",
+                        type(proposals).__name__,
+                    )
+                else:
+                    logger.warning(
+                        "OpenAI response is neither list nor dict: %s",
+                        type(parsed).__name__,
+                    )
                     
+            except json.JSONDecodeError as e:
+                logger.warning("JSON parse error (attempt %d): %s", attempt, e)
+                if attempt == self.max_retries:
+                    raise RuntimeError(f"OpenAI adapter: invalid JSON after {self.max_retries} retries: {e}")
             except Exception as e:
                 if attempt == self.max_retries:
                     raise RuntimeError(f"OpenAI adapter failed after {self.max_retries} retries: {e}")
+                logger.warning("OpenAI call failed (attempt %d): %s", attempt, e)
                 continue
                 
         return []

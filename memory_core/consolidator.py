@@ -9,25 +9,20 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .audit import AuditLog
 from .config import Config
-from .episodes import EpisodeStore, Episode
-from .facts import FactStore, AUTHORITY_POLICY
+from .episodes import EpisodeStore
+from .facts import FactStore
 from .gates import GatePipeline, PipelineContext
-from .ids import fact_id
 from .llm import LLMProvider
+from .narratives import NarrativeStore
 from .queue import ProposalQueue
 from .router import StorageRouter
 
 
 logger = logging.getLogger("memory_core.consolidator")
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 _SYSTEM_PROMPT = """You are the Memory Consolidator.
@@ -59,6 +54,7 @@ class Consolidator:
         self.audit = AuditLog(router)
         self.episodes = EpisodeStore(router)
         self.facts = FactStore(router)
+        self.narratives = NarrativeStore(router, config)
         self.queue = ProposalQueue(router, config, self.audit)
         self.gates = GatePipeline()
 
@@ -136,87 +132,17 @@ class Consolidator:
             elif res.decision == "pass":
                 ptype = p.get("type")
                 if ptype == "fact":
-                    self._write_fact(namespace, p)
+                    self.facts.write_fact(namespace, p)
                     stats["facts_written"] += 1
                     ctx.new_facts_count += 1  # budget: count committed facts only
                 elif ptype == "supersede":
-                    self._supersede_fact(namespace, p)
+                    self.facts.supersede_fact(namespace, p)
                     stats["facts_written"] += 1
                     ctx.new_facts_count += 1  # budget: count committed facts only
                 elif ptype == "narrative":
-                    # For B3, we just count it. B4 will implement narratives.
-                    pass
+                    self.narratives.write(namespace, p["content"], "consolidator")
                     
         # 6. Mark consumed
         self.episodes.mark_consumed(namespace, ep_ids, run_id)
         
         return stats
-
-    def _write_fact(self, namespace: str, p: Dict[str, Any]) -> None:
-        lane = p["lane"]
-        content = p["content"]
-        fid = fact_id(content, lane)
-        now = _utc_now_iso()
-        
-        conn = self.router.connect(namespace)
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO facts (id, namespace, content, tags, source, confidence, "
-            "authority_class, evidence_refs, created_at, last_accessed) "
-            "VALUES (?, ?, ?, '[]', ?, ?, ?, ?, ?, ?)",
-            (
-                fid, namespace, content,
-                p["source"], p["confidence"], lane,
-                json.dumps(p.get("evidence_refs", [])),
-                now, now
-            )
-        )
-        conn.commit()
-        
-        self.audit.log(
-            namespace, "fact_write", True,
-            fact_id=fid, authority_class=lane, source=p["source"],
-            reason="human_write" if p["source"] == "trusted_user" else None
-        )
-
-    def _supersede_fact(self, namespace: str, p: Dict[str, Any]) -> None:
-        old_id = p["old_fact_id"]
-        content = p["content"]
-        
-        conn = self.router.connect(namespace)
-        cursor = conn.cursor()
-        
-        # Get old lane
-        cursor.execute("SELECT authority_class FROM facts WHERE id = ?", (old_id,))
-        row = cursor.fetchone()
-        if not row:
-            return
-            
-        lane = row[0]
-        new_fid = fact_id(content, lane)
-        now = _utc_now_iso()
-        
-        cursor.execute(
-            "INSERT INTO facts (id, namespace, content, tags, source, confidence, "
-            "authority_class, evidence_refs, created_at, last_accessed) "
-            "VALUES (?, ?, ?, '[]', ?, ?, ?, ?, ?, ?)",
-            (
-                new_fid, namespace, content,
-                p["source"], 1.0, lane,
-                json.dumps(p.get("evidence_refs", [])),
-                now, now
-            )
-        )
-        
-        # Supersede old
-        cursor.execute(
-            "UPDATE facts SET superseded_by = ? WHERE id = ?",
-            (new_fid, old_id)
-        )
-        conn.commit()
-        
-        self.audit.log(
-            namespace, "fact_supersede", True,
-            fact_id=new_fid, authority_class=lane, source=p["source"],
-            metadata={"superseded": old_id}
-        )

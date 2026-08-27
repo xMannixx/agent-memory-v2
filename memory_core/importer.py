@@ -19,22 +19,17 @@ Import is idempotent (content-hash IDs) and dry-runnable.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .ids import make_id
 from .router import StorageRouter
+from .utils import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger("memory_core.importer")
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
@@ -107,6 +102,9 @@ def import_v3(
     v2_conn = router.connect(namespace)
 
     try:
+        # Begin a single transaction for the entire import.
+        v2_conn.execute("BEGIN IMMEDIATE")
+
         _import_facts(v3_conn, v2_conn, namespace, dry_run, result)
         _import_snippets_as_episodes(v3_conn, v2_conn, namespace, dry_run,
                                       result)
@@ -132,6 +130,12 @@ def import_v3(
                 ),
             )
             v2_conn.commit()
+        else:
+            v2_conn.rollback()
+    except Exception as e:
+        v2_conn.rollback()
+        result.errors.append(f"Import failed, rolled back: {e}")
+        logger.error("Import failed, rolled back: %s", e)
     finally:
         v3_conn.close()
 
@@ -177,8 +181,6 @@ def _import_facts(
             (fid, ns) + row[1:],
         )
         imported += 1
-    if not dry_run:
-        v2.commit()
     result.add("facts", imported, skipped)
 
 
@@ -239,8 +241,6 @@ def _import_snippets_as_episodes(
             ),
         )
         imported += 1
-    if not dry_run:
-        v2.commit()
     result.add("episodes_from_snippets", imported, skipped)
 
 
@@ -279,8 +279,6 @@ def _import_lessons(
             (lid, ns) + row[1:],
         )
         imported += 1
-    if not dry_run:
-        v2.commit()
     result.add("lessons", imported, skipped)
 
 
@@ -318,8 +316,6 @@ def _import_entities(
             (eid, ns) + row[1:],
         )
         imported += 1
-    if not dry_run:
-        v2.commit()
     result.add("entities", imported, skipped)
 
 
@@ -359,8 +355,6 @@ def _import_entity_relations(
             (rid, ns) + row[1:],
         )
         imported += 1
-    if not dry_run:
-        v2.commit()
     result.add("entity_relations", imported, skipped)
 
 
@@ -409,8 +403,6 @@ def _import_procedural_rules(
             (rid, ns) + row[1:],
         )
         imported += 1
-    if not dry_run:
-        v2.commit()
     result.add("procedural_rules", imported, skipped)
 
 
@@ -452,8 +444,6 @@ def _import_rule_conflicts(
             (cid, ns) + row[1:],
         )
         imported += 1
-    if not dry_run:
-        v2.commit()
     result.add("rule_conflicts", imported, skipped)
 
 
@@ -489,8 +479,6 @@ def _import_memory_meta(
             (key, ns, row[1]),
         )
         imported += 1
-    if not dry_run:
-        v2.commit()
     result.add("memory_meta", imported, skipped)
 
 
@@ -524,6 +512,4 @@ def _import_memory_audit(
             (ns,) + row,
         )
         imported += 1
-    if not dry_run:
-        v2.commit()
     result.add("memory_audit", imported)

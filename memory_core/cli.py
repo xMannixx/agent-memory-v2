@@ -115,7 +115,7 @@ def main(args: Optional[list[str]] = None) -> int:
             return 1
             
         try:
-            from src.adapters.openai_provider import OpenAILlm
+            from memory_core.adapters.openai_provider import OpenAILlm
         except ImportError:
             print("Error: openai package not installed. Run 'pip install memory-core[openai]'", file=sys.stderr)
             return 1

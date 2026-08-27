@@ -66,7 +66,13 @@ class GatePipeline:
     """The G1-G9 deterministic pipeline."""
     
     def evaluate(self, ctx: PipelineContext, proposal: Dict[str, Any]) -> Tuple[GateResult, Dict[str, Any]]:
-        """Run a proposal through all gates. Returns the final result and a report of all gates."""
+        """Run a proposal through all gates. Returns the final result and a report of all gates.
+
+        The proposal is copied before evaluation so that gates can never
+        mutate the caller's data (fixes INV-6 side-effect violation).
+        """
+        import copy
+        proposal = copy.deepcopy(proposal)
         report = {}
         
         gates = [
@@ -127,20 +133,25 @@ class GatePipeline:
         # Clean control chars (except newline)
         content = "".join(ch for ch in content if ord(ch) >= 32 or ch == '\n')
         
-        # Check injection patterns
+        # Check injection patterns (extended list)
         lower_content = content.lower()
-        if "```" in content or "system:" in lower_content or "ignore previous" in lower_content:
+        _INJECTION_PATTERNS = (
+            "```", "system:", "ignore previous",
+            "ignore all", "disregard", "override instructions",
+            "you are now", "forget your",
+        )
+        if any(pat in lower_content for pat in _INJECTION_PATTERNS):
             return GateResult("reject", "sanitize_failed", "Injection pattern detected")
             
-        # Write back cleaned content
+        # Write back cleaned content (safe: we already work on a copy)
         p["content"] = content.strip()
         
-        # Length caps
+        # Length caps — use lane policy content_max_chars, not injection config
         ptype = p.get("type")
         if ptype in ("fact", "supersede"):
             lane = p.get("lane", "evidence")
-            # In supersede, we need to get the lane from old fact, but for G2 we just cap conservatively at 2000
-            cap = getattr(ctx.config.injection, lane, 2000) if hasattr(ctx.config.injection, lane) else 2000
+            policy = AUTHORITY_POLICY.get(lane, AUTHORITY_POLICY["evidence"])
+            cap = policy.get("content_max_chars", 2000)
             if len(p["content"]) > cap:
                 return GateResult("reject", "sanitize_failed", f"Content exceeds lane cap {cap}")
         elif ptype == "narrative":
@@ -224,21 +235,55 @@ class GatePipeline:
             cursor.execute("SELECT 1 FROM facts WHERE id = ?", (fid,))
             if cursor.fetchone():
                 return GateResult("reject", "duplicate", "Fact already exists")
+        elif ptype == "supersede":
+            # Check that the new content doesn't already exist as an active fact
+            old_id = p.get("old_fact_id")
+            conn = ctx.router.connect(ctx.namespace)
+            cursor = conn.cursor()
+            cursor.execute("SELECT authority_class FROM facts WHERE id = ?", (old_id,))
+            row = cursor.fetchone()
+            if row:
+                lane = row[0]
+                new_fid = fact_id(p["content"], lane)
+                cursor.execute("SELECT 1 FROM facts WHERE id = ?", (new_fid,))
+                if cursor.fetchone():
+                    return GateResult("reject", "duplicate", "Supersede target already exists as fact")
                 
         return GateResult("pass")
 
     def _g7_conflict(self, ctx: PipelineContext, p: Dict[str, Any]) -> GateResult:
         ptype = p.get("type")
-        # Just simple single-valued check for B2
         if ptype == "fact":
             lane = p.get("lane")
             policy = AUTHORITY_POLICY.get(lane)
             if policy["single_valued"]:
                 conn = ctx.router.connect(ctx.namespace)
                 cursor = conn.cursor()
-                cursor.execute("SELECT id FROM facts WHERE namespace = ? AND authority_class = ? AND superseded_by IS NULL", (ctx.namespace, lane))
-                if cursor.fetchone():
-                    return GateResult("queue", "conflict_detected", f"Single-valued lane {lane} has existing active fact")
+                cursor.execute(
+                    "SELECT id FROM facts WHERE namespace = ? AND authority_class = ? AND superseded_by IS NULL",
+                    (ctx.namespace, lane),
+                )
+                existing = cursor.fetchall()
+                if existing:
+                    return GateResult("queue", "conflict_detected", f"Single-valued lane {lane} has {len(existing)} active fact(s)")
+        elif ptype == "supersede":
+            # For supersede on single-valued lanes, also queue if multiple active facts exist
+            old_id = p.get("old_fact_id")
+            conn = ctx.router.connect(ctx.namespace)
+            cursor = conn.cursor()
+            cursor.execute("SELECT authority_class FROM facts WHERE id = ?", (old_id,))
+            row = cursor.fetchone()
+            if row:
+                lane = row[0]
+                policy = AUTHORITY_POLICY.get(lane)
+                if policy and policy["single_valued"]:
+                    cursor.execute(
+                        "SELECT id FROM facts WHERE namespace = ? AND authority_class = ? AND superseded_by IS NULL",
+                        (ctx.namespace, lane),
+                    )
+                    existing = cursor.fetchall()
+                    if len(existing) > 1:
+                        return GateResult("queue", "conflict_detected", f"Single-valued lane {lane} has {len(existing)} active facts, supersede needs review")
                     
         return GateResult("pass")
 

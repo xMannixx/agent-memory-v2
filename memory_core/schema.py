@@ -209,12 +209,12 @@ CREATE TABLE IF NOT EXISTS memory_audit (
 
 _FACTS_FTS_DDL = """\
 CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts
-USING fts5(content, tags, tokenize='porter');
+USING fts5(content, tags, tokenize='unicode61');
 """
 
 _EPISODES_FTS_DDL = """\
 CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts
-USING fts5(content, tokenize='porter');
+USING fts5(content, tokenize='unicode61');
 """
 
 # -- Indexes ------------------------------------------------------------------

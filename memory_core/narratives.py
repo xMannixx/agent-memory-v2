@@ -5,17 +5,13 @@ Manages the versioned narrative layer.
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
 from typing import Optional
 
 from .config import Config
+from .ids import narrative_id
 from .models import Narrative
 from .router import StorageRouter
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+from .utils import utc_now_iso
 
 
 class NarrativeStore:
@@ -49,20 +45,23 @@ class NarrativeStore:
         )
 
     def write(self, namespace: str, content: str, by: str) -> str:
-        """Write a new version of the narrative. Returns the new ID."""
+        """Write a new version of the narrative. Returns the new ID.
+
+        Uses a deterministic content-hash ID (INV-1) instead of uuid4.
+        """
         latest = self.get_latest(namespace)
         next_version = (latest.version + 1) if latest else 1
-        
-        narrative_id = f"nar_{uuid.uuid4().hex[:16]}"
-        now = _utc_now_iso()
-        
+
+        nar_id = narrative_id(namespace, next_version)
+        now = utc_now_iso()
+
         conn = self._router.connect(namespace)
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO narratives "
+            "INSERT OR IGNORE INTO narratives "
             "(id, namespace, version, content, created_at, created_by) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (narrative_id, namespace, next_version, content, now, by)
+            (nar_id, namespace, next_version, content, now, by)
         )
         conn.commit()
-        return narrative_id
+        return nar_id

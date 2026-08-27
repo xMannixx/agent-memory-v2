@@ -14,7 +14,7 @@ dependencies = []
 openai = ["openai>=1.0.0"]
 
 [project.scripts]
-memory-cli = "src.cli:main"
+memory-cli = "memory_core.cli:main"
 
 [tool.setuptools]
-packages = ["src", "src.adapters"]
+packages = ["memory_core", "memory_core.adapters"]
