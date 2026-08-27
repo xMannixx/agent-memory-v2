@@ -9,7 +9,7 @@ Please read this document carefully before submitting a Pull Request.
 If your PR breaks an invariant, the test suite will fail. If the test suite passes but violates the spirit of an invariant, the PR will be rejected.
 
 - **INV-1 (Determinism)**: The Core Pipeline MUST be pure and deterministic. Given the same DB state and the same JSON inputs, the gates must output the exact same DB state. Do not use random numbers, non-seeded hashes, or non-injected timestamps in the core evaluation paths.
-- **INV-2 (Standard Library Only)**: `src/` (excluding `src/adapters/`) must NOT import any third-party libraries. No `sqlalchemy`, no `pydantic`. This ensures the core is incredibly fast and highly portable.
+- **INV-2 (Standard Library Only)**: `memory_core/` (excluding `memory_core/adapters/`) must NOT import any third-party libraries. No `sqlalchemy`, no `pydantic`. This ensures the core is incredibly fast and highly portable.
 - **INV-3 (Asynchronous Bounds)**: Do not add any blocking LLM calls to the synchronous read/write paths. The Consolidator runs in the background.
 
 ## 2. Development Setup
@@ -35,13 +35,13 @@ Run the suite using `pytest`:
 pytest tests/ -v
 ```
 
-If you add a new module to the `src/` core, you **must** add it to the `CORE_MODULES` list in `tests/test_invariants.py` to ensure it passes the `INV-2` (stdlib-only) check.
+If you add a new module to the `memory_core/` core, you **must** add it to the `CORE_MODULES` list in `tests/test_invariants.py` to ensure it passes the `INV-2` (stdlib-only) check.
 
 ## 4. Adapters
 
 If you want to add support for a new LLM provider (e.g., Anthropic, Gemini, local Ollama):
-1. Create your adapter in `src/adapters/`.
-2. Inherit from `src.llm.LLMProvider`.
+1. Create your adapter in `memory_core/adapters/`.
+2. Inherit from `memory_core.llm.LLMProvider`.
 3. You **are** allowed to use third-party libraries (like `anthropic` or `google-generativeai`) inside the `adapters/` folder. The INV-2 tests explicitly ignore this folder.
 4. Add the adapter as an optional dependency group in `pyproject.toml`.
 

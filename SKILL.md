@@ -1,7 +1,7 @@
 ---
 name: memory-core-v2
 description: "Use when integrating Agent Memory Core v2 with an LLM agent or reviewing its deterministic memory gates."
-version: 2.0.0-dev
+version: 2.0.2
 author: xPerryx + Lena OpenClaw
 license: MIT
 platforms: [linux, macos, windows]

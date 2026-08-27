@@ -105,11 +105,12 @@ Memory Core v2 is built in 5 strictly decoupled blocks:
 
 ## 🔒 Security Model
 
-- **Fail-Closed Gates (INV-6)**: Any gate exception causes an automatic rejection — never a silent pass.
+- **Fail-Closed Gates (INV-6)**: Any gate exception causes an automatic rejection — never a silent pass. Proposals are deep-copied before evaluation so gates never mutate caller data.
 - **Origin Ceiling (G4)**: Untrusted sources (`external_web`, `unknown`) are restricted to the `evidence` lane.
-- **Anti-Injection (G2)**: Detects `SYSTEM:` overrides, code fences, and "ignore previous" patterns.
+- **Anti-Injection (G2)**: Detects `SYSTEM:` overrides, code fences, `ignore previous`, `ignore all`, `disregard`, `override instructions`, and more.
 - **Budget Enforcement (G8)**: Only actually committed facts count toward the per-run budget. Queued proposals do not consume budget.
-- **Atomic Approvals**: `queue approve` writes the fact + flips status + creates audit entry within a single SQLite transaction with rollback on error.
+- **Atomic Approvals**: `queue approve` uses `BEGIN IMMEDIATE` to acquire a write lock before reading, then writes the fact + flips status + creates audit entry in a single SQLite transaction with rollback on error.
+- **Thread-Safe Router**: Connection cache is protected by `threading.Lock` for safe multi-threaded access.
 
 ---
 *Built for the Agent Memory Skill framework.*

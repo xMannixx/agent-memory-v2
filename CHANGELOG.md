@@ -2,6 +2,33 @@
 
 All notable changes to Memory Core v2 will be documented here.
 
+## [2.0.2] — 2026-08-27
+
+### Fixed (Code Review)
+- **Gates (G2)**: Gate pipeline no longer mutates the caller's proposal dict. Proposals are deep-copied before evaluation, restoring the "pure functional" guarantee (INV-6).
+- **Gates (G2)**: Content length caps now use `content_max_chars` from the lane policy (`AUTHORITY_POLICY`) instead of the unrelated `InjectionConfig` values. Each lane has its own cap.
+- **Gates (G2)**: Extended injection pattern detection — now also catches `ignore all`, `disregard`, `override instructions`, `you are now`, `forget your`.
+- **Gates (G6)**: Deduplication now also checks `supersede` proposals, preventing duplicate supersede targets.
+- **Gates (G7)**: Conflict detection improved for `supersede` proposals on single-valued lanes.
+- **Consolidator**: No longer bypasses `FactStore` with raw SQL. Uses `FactStore.write_fact()` and `FactStore.supersede_fact()` for single write path.
+- **Queue**: `approve()` now uses `BEGIN IMMEDIATE` to acquire a write lock before reading the proposal, preventing race conditions with concurrent approvers.
+- **Queue**: `approve()` now uses the deterministic `narrative_id()` hash instead of `fact_id()` for narrative proposals.
+- **Narratives**: `write()` now uses deterministic content-hash IDs (`narrative_id()`) instead of `uuid4()`, satisfying INV-1 (Determinism).
+- **Importer**: Entire v3.6 import is now wrapped in a single transaction with rollback on failure, preventing partial imports.
+- **OpenAI Adapter**: Robust JSON parsing — handles both `{"proposals": [...]}` and bare `[...]` formats, logs warnings on unexpected shapes, distinguishes `JSONDecodeError` from other failures.
+- **Config**: Docstring incorrectly said "TOML config file" for a JSON loader. Corrected.
+
+### Changed
+- **Package renamed** from `src` to `memory_core` to avoid namespace collisions with other packages. All internal imports remain relative and are unaffected.
+- **Router**: Connection cache is now thread-safe via `threading.Lock`. Connections use `check_same_thread=False` for multi-threaded access.
+- **FTS5 Tokenizer**: Changed from `porter` (English-only) to `unicode61` (Unicode-aware, better German support).
+- **Fact TTL**: `_touch_facts()` now uses batched per-lane UPDATEs instead of individual per-fact queries, reducing I/O overhead.
+- **Lane Policies**: `AUTHORITY_POLICY` now includes `content_max_chars` per lane (identity: 500, preference: 1000, evidence: 2000, authorization: 500, procedural: 1500).
+- **Audit**: Added `human_review` to standardized reason codes.
+- **Utils**: Shared `utc_now()` / `utc_now_iso()` helpers in `memory_core/utils.py`, eliminating duplicate definitions across 5 modules.
+- **`__init__.py`**: Now exports the public API (Config, StorageRouter, Consolidator, FactStore, etc.).
+- **Unused imports** cleaned up across `consolidator.py`, `episodes.py`, `audit.py`, `importer.py`.
+
 ## [2.0.1] — 2026-08-01
 
 ### Fixed
