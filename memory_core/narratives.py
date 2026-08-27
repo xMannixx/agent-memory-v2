@@ -36,12 +36,12 @@ class NarrativeStore:
         if not row:
             return None
         return Narrative(
-            id=row[0],
-            namespace=row[1],
-            version=row[2],
-            content=row[3],
-            created_at=row[4],
-            created_by=row[5],
+            id=row["id"],
+            namespace=row["namespace"],
+            version=row["version"],
+            content=row["content"],
+            created_at=row["created_at"],
+            created_by=row["created_by"],
         )
 
     def write(self, namespace: str, content: str, by: str) -> str:

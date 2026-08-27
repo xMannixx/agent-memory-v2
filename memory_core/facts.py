@@ -335,7 +335,7 @@ class FactStore:
         if not row:
             return None
 
-        lane = row[0]
+        lane = row["authority_class"]
         new_fid = _fact_id(content, lane)
         now = utc_now_iso()
 
@@ -379,7 +379,7 @@ class FactStore:
             f"SELECT id, authority_class FROM facts WHERE id IN ({placeholders})",
             fact_ids,
         )
-        lane_map: Dict[str, str] = {row[0]: row[1] for row in cursor.fetchall()}
+        lane_map: Dict[str, str] = {row["id"]: row["authority_class"] for row in cursor.fetchall()}
 
         # Group facts by lane for batch updates.
         by_lane: Dict[str, List[str]] = {}

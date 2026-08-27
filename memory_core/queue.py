@@ -23,15 +23,15 @@ def _utc_now() -> datetime:
 
 def _row_to_proposal(row: tuple) -> Proposal:
     return Proposal(
-        id=row[0],
-        run_id=row[1],
-        namespace=row[2],
-        proposal_type=row[3],
-        payload=_json_loads_safe(row[4], {}),
-        status=row[5],
-        gate_report=_json_loads_safe(row[6], {}),
-        created_at=row[7],
-        decided_at=row[8],
+        id=row["id"],
+        run_id=row["run_id"],
+        namespace=row["namespace"],
+        proposal_type=row["proposal_type"],
+        payload=_json_loads_safe(row["payload"], {}),
+        status=row["status"],
+        gate_report=_json_loads_safe(row["gate_report"], {}),
+        created_at=row["created_at"],
+        decided_at=row["decided_at"],
         decided_by=row[9],
     )
 
