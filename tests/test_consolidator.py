@@ -12,13 +12,13 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import Config
-from src.consolidator import Consolidator
-from src.episodes import EpisodeStore
-from src.facts import FactStore
-from src.llm import MockLLM
-from src.queue import ProposalQueue
-from src.router import StorageRouter
+from memory_core.config import Config
+from memory_core.consolidator import Consolidator
+from memory_core.episodes import EpisodeStore
+from memory_core.facts import FactStore
+from memory_core.llm import MockLLM
+from memory_core.queue import ProposalQueue
+from memory_core.router import StorageRouter
 
 
 @pytest.fixture

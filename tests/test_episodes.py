@@ -11,9 +11,9 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import Config
-from src.router import StorageRouter
-from src.episodes import EpisodeStore, VALID_ORIGINS, VALID_ROLES
+from memory_core.config import Config
+from memory_core.router import StorageRouter
+from memory_core.episodes import EpisodeStore, VALID_ORIGINS, VALID_ROLES
 
 
 @pytest.fixture
@@ -37,8 +37,8 @@ class TestAdd:
         fixed_time = datetime.datetime(2026, 1, 1, tzinfo=timezone.utc)
         
         # We need to mock _utc_now in src.episodes
-        import src.episodes
-        monkeypatch.setattr(src.episodes, "_utc_now", lambda: fixed_time)
+        import memory_core.episodes
+        monkeypatch.setattr(memory_core.episodes, "_utc_now", lambda: fixed_time)
         
         id1 = store.add("default", "Same content", "user", "trusted_user")
         id2 = store.add("default", "Same content", "user", "trusted_user")

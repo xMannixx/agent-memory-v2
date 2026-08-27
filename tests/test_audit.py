@@ -12,9 +12,9 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.audit import AuditLog
-from src.config import Config
-from src.router import StorageRouter
+from memory_core.audit import AuditLog
+from memory_core.config import Config
+from memory_core.router import StorageRouter
 
 
 @pytest.fixture

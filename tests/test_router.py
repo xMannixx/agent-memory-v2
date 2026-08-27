@@ -12,9 +12,9 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import Config, StorageConfig
-from src.router import StorageRouter
-from src.schema import table_exists
+from memory_core.config import Config, StorageConfig
+from memory_core.router import StorageRouter
+from memory_core.schema import table_exists
 
 
 class TestSingleTopology:

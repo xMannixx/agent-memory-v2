@@ -12,7 +12,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.adapters.openai_provider import OpenAILlm
+from memory_core.adapters.openai_provider import OpenAILlm
 
 
 def test_openai_missing_package(monkeypatch):

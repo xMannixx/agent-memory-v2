@@ -14,7 +14,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import load_config, Config
+from memory_core.config import load_config, Config
 
 
 class TestDefaults:

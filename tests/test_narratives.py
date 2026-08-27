@@ -11,11 +11,11 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import Config
-from src.facts import FactStore
-from src.injection import get_injection_block
-from src.narratives import NarrativeStore
-from src.router import StorageRouter
+from memory_core.config import Config
+from memory_core.facts import FactStore
+from memory_core.injection import get_injection_block
+from memory_core.narratives import NarrativeStore
+from memory_core.router import StorageRouter
 
 
 @pytest.fixture

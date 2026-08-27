@@ -18,10 +18,10 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import Config, StorageConfig
-from src.router import StorageRouter
-from src.episodes import EpisodeStore
-from src.schema import init_schema
+from memory_core.config import Config, StorageConfig
+from memory_core.router import StorageRouter
+from memory_core.episodes import EpisodeStore
+from memory_core.schema import init_schema
 
 
 # -- INV-1: Deterministic core -----------------------------------------------
@@ -32,13 +32,13 @@ class TestInv1DeterministicCore:
 
     def test_inv_1_episode_id_deterministic(self):
         """Same inputs always produce the same episode ID."""
-        from src.ids import episode_id
+        from memory_core.ids import episode_id
         id1 = episode_id("Hello", "session1", "2026-01-01T00:00:00")
         id2 = episode_id("Hello", "session1", "2026-01-01T00:00:00")
         assert id1 == id2
 
     def test_inv_1_fact_id_deterministic(self):
-        from src.ids import fact_id
+        from memory_core.ids import fact_id
         id1 = fact_id("User is Alex", "identity")
         id2 = fact_id("User is Alex", "identity")
         assert id1 == id2
@@ -64,23 +64,23 @@ class TestInv2StdlibOnly:
     library."""
 
     CORE_MODULES = [
-        "src/__init__.py",
-        "src/ids.py",
-        "src/models.py",
-        "src/config.py",
-        "src/schema.py",
-        "src/router.py",
-        "src/episodes.py",
-        "src/facts.py",
-        "src/importer.py",
-        "src/audit.py",
-        "src/queue.py",
-        "src/gates.py",
-        "src/llm.py",
-        "src/consolidator.py",
-        "src/narratives.py",
-        "src/injection.py",
-        "src/cli.py",
+        "memory_core/__init__.py",
+        "memory_core/ids.py",
+        "memory_core/models.py",
+        "memory_core/config.py",
+        "memory_core/schema.py",
+        "memory_core/router.py",
+        "memory_core/episodes.py",
+        "memory_core/facts.py",
+        "memory_core/importer.py",
+        "memory_core/audit.py",
+        "memory_core/queue.py",
+        "memory_core/gates.py",
+        "memory_core/llm.py",
+        "memory_core/consolidator.py",
+        "memory_core/narratives.py",
+        "memory_core/injection.py",
+        "memory_core/cli.py",
     ]
 
     # Standard library top-level modules that are allowed.
@@ -122,7 +122,7 @@ class TestInv2StdlibOnly:
             pytest.skip(f"{module_path} not found")
         imports = self._get_imports(filepath)
         for imp in imports:
-            assert imp in self.STDLIB_PREFIXES or imp.startswith("src"), (
+            assert imp in self.STDLIB_PREFIXES or imp.startswith("memory_core"), (
                 f"{module_path} imports non-stdlib module: {imp}"
             )
 
@@ -188,7 +188,7 @@ class TestInv11AdditiveMigrations:
 
     def test_inv_11_schema_ddl_uses_if_not_exists(self):
         """Verify DDL strings use IF NOT EXISTS."""
-        from src import schema
+        from memory_core import schema
         # Check all DDL constants.
         ddl_vars = [
             name for name in dir(schema)
@@ -213,7 +213,7 @@ class TestInv5PrivilegedHumanGated:
 
     @pytest.mark.parametrize("lane", ["identity", "authorization", "procedural"])
     def test_inv_5_privileged_lanes_queued(self, lane):
-        from src.gates import GatePipeline, PipelineContext
+        from memory_core.gates import GatePipeline, PipelineContext
         config = Config()
         router = StorageRouter(config, db_path_override=":memory:")
         ctx = PipelineContext("test", "default", router, config)
@@ -233,7 +233,7 @@ class TestInv6FailClosedGates:
     """INV-6: If a gate encounters an exception, it rejects the proposal."""
 
     def test_inv_6_exception_causes_rejection(self, monkeypatch):
-        from src.gates import GatePipeline, PipelineContext
+        from memory_core.gates import GatePipeline, PipelineContext
         config = Config()
         router = StorageRouter(config, db_path_override=":memory:")
         ctx = PipelineContext("test", "default", router, config)
@@ -261,7 +261,7 @@ class TestInv7AppendOnlyAudit:
     We test the append-only nature by verifying we can only INSERT."""
 
     def test_inv_7_audit_log_inserts(self):
-        from src.audit import AuditLog
+        from memory_core.audit import AuditLog
         config = Config()
         router = StorageRouter(config, db_path_override=":memory:")
         audit = AuditLog(router)
@@ -276,7 +276,7 @@ class TestInv8EvidenceBacked:
     """INV-8: A fact must trace back to at least one episode."""
 
     def test_inv_8_missing_evidence_rejected(self):
-        from src.gates import GatePipeline, PipelineContext
+        from memory_core.gates import GatePipeline, PipelineContext
         config = Config()
         router = StorageRouter(config, db_path_override=":memory:")
         ctx = PipelineContext("test", "default", router, config)
@@ -299,8 +299,8 @@ class TestInv3AsynchronousBounds:
     The Consolidator runs fully asynchronously/decoupled from the EpisodeStore."""
 
     def test_inv_3_ingest_is_synchronous_and_llm_free(self):
-        from src.episodes import EpisodeStore
-        from src.llm import MockLLM
+        from memory_core.episodes import EpisodeStore
+        from memory_core.llm import MockLLM
         config = Config()
         router = StorageRouter(config, db_path_override=":memory:")
         store = EpisodeStore(router)

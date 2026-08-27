@@ -12,7 +12,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.schema import init_schema, table_exists
+from memory_core.schema import init_schema, table_exists
 
 
 @pytest.fixture

@@ -12,10 +12,10 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.audit import AuditLog
-from src.config import Config
-from src.queue import ProposalQueue
-from src.router import StorageRouter
+from memory_core.audit import AuditLog
+from memory_core.config import Config
+from memory_core.queue import ProposalQueue
+from memory_core.router import StorageRouter
 
 
 @pytest.fixture
@@ -72,14 +72,14 @@ def test_reject(queue):
 
 
 def test_expire_stale(queue, monkeypatch):
-    import src.queue
+    import memory_core.queue
     
     # Enqueue a proposal with current time
     queue.enqueue("prop_1", "run_1", "default", "fact", {}, {})
     
     # Mock time to be far in the future
     future = datetime.now(timezone.utc) + timedelta(days=queue._ttl_days + 2)
-    monkeypatch.setattr(src.queue, "_utc_now", lambda: future)
+    monkeypatch.setattr(memory_core.queue, "_utc_now", lambda: future)
     
     expired_count = queue.expire_stale("default")
     assert expired_count == 1

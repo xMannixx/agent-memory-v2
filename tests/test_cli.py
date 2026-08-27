@@ -12,11 +12,11 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.cli import main
-from src.audit import AuditLog
-from src.config import Config, load_config
-from src.queue import ProposalQueue
-from src.router import StorageRouter
+from memory_core.cli import main
+from memory_core.audit import AuditLog
+from memory_core.config import Config, load_config
+from memory_core.queue import ProposalQueue
+from memory_core.router import StorageRouter
 
 
 def test_cli_init_command(capsys, monkeypatch, tmp_path):
