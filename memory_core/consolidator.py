@@ -25,17 +25,15 @@ from .router import StorageRouter
 logger = logging.getLogger("memory_core.consolidator")
 
 
-_SYSTEM_PROMPT = """You are the Memory Consolidator.
-Your job is to read new episodes and existing memory facts, and output JSON proposals to update the memory.
-Proposals must be a JSON array of objects.
-
-Types of proposals:
-1. {"type": "fact", "lane": "<lane>", "content": "<fact>", "confidence": <float 0-1>, "evidence_refs": ["<ep_id>"]}
-2. {"type": "supersede", "old_fact_id": "<fact_id>", "content": "<new_fact>", "evidence_refs": ["<ep_id>"]}
-3. {"type": "narrative", "content": "<new_narrative_text>"}
-
-Output ONLY valid JSON.
-"""
+_SYSTEM_PROMPT = (
+    "Extract facts from conversations. Return JSON.\n\n"
+    'Format: {"proposals": [{"type": "fact", "lane": "<lane>", '
+    '"content": "<fact>", "confidence": 0.9, "source": "observation", '
+    '"evidence_refs": ["<ep_id>"]}]}\n\n'
+    "Lanes: identity (who user is, permanent), "
+    "preference (what user likes), evidence (general facts).\n"
+    "Use ONLY these 3 lanes. Extract ALL meaningful facts."
+)
 
 
 class Consolidator:
