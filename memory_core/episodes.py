@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 from .ids import episode_id as _make_episode_id
 from .models import Episode, row_to_episode
 from .router import StorageRouter
-from .utils import utc_now_iso as _utc_now_iso
+from .utils import utc_now as _utc_now
 
 logger = logging.getLogger("memory_core.episodes")
 
@@ -295,9 +295,6 @@ class EpisodeStore:
 
 
 # -- helpers ------------------------------------------------------------------
-
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def _safe_fts_query(query: str) -> str:
