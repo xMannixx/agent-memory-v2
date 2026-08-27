@@ -11,6 +11,7 @@ from .narratives import NarrativeStore
 from .queue import ProposalQueue
 from .audit import AuditLog
 from .gates import GatePipeline, PipelineContext, GateResult
+from .api import memory_context, recall, add_episode, add_conversation_turn, get_facts, get_stats
 from .llm import LLMProvider
 from .models import Episode, Fact, Narrative, Proposal, Lesson, Entity
 
@@ -29,6 +30,12 @@ __all__ = [
     "GatePipeline",
     "PipelineContext",
     "GateResult",
+    "memory_context",
+    "recall",
+    "add_episode",
+    "add_conversation_turn",
+    "get_facts",
+    "get_stats",
     "LLMProvider",
     "Episode",
     "Fact",
